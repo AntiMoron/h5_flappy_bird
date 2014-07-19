@@ -1,0 +1,292 @@
+<html>
+<head>
+<title>A html5 flappy game</title>
+<script type="text/javascript">
+
+var mainState;
+var m_context;
+var m_birdImage;
+var m_pipeImage;
+var m_groundImage;
+var m_background;
+var b_isDead = false;
+var b_isOnGround = false;
+var g_gravity;
+var g_groundY;
+var g_forwardSpeed;
+var e_bird;
+var e_pipes;
+var console;
+var FLOAT3 = 
+{
+	createNew : function()
+	{
+		var float3 = {};
+		float3.m = new Array(0.0,0.0,0.0);
+		return float3;
+	}
+}
+
+var FLOAT4 = 
+{
+	createNew : function()
+	{
+		var float4 = {};
+		float4.m = new Array(0.0,0.0,0.0,0.0);
+		return float4;
+	}
+};
+
+
+var Bird = 
+{
+	createNew : function()
+	{
+		bird = {};
+
+		bird.dy = 0.0 ;
+		bird.m_rotation = FLOAT3.createNew();
+		bird.m_translation = FLOAT3.createNew();
+		bird.Draw = function()
+		{
+			var halfWidth = m_birdImage.width / 2.0;
+			var halfHeight = m_birdImage.height / 2.0;
+			m_context.translate(bird.m_translation.m[0],
+					bird.m_translation.m[1]);
+			m_context.translate(halfWidth ,halfHeight );
+			m_context.rotate(bird.m_rotation.m[0]);
+			m_context.translate(-halfWidth , -halfHeight );
+			m_context.drawImage(m_birdImage,0,0);
+		}
+		bird.Flap = function()
+		{
+			if(bird.m_translation.m[1] < 50.0)
+				return 0;
+			if(b_isDead)
+				return 0;
+			if(b_isOnGround)
+				return 0;
+			bird.dy = -10.0;
+			return 1;
+		}
+
+		bird.UpdateLogic = function()
+		{
+			for(var i=0;i<e_pipes.length;i++)
+			{
+				if(e_pipes[i].JudgeHit(bird.m_translation.m[0],bird.m_translation.m[1]))
+				{
+					b_isDead = true;
+					break;
+				}
+			}
+			if(bird.m_translation.m[1]>(g_groundY - 40.0))
+			{
+				bird.m_translation.m[1]=(g_groundY - 40.0);
+				b_isDead = true;
+				b_isOnGround = true;
+			}
+			if(b_isOnGround == false)
+			{
+				bird.m_rotation.m[0] = Math.atan(0.5 * bird.dy / g_forwardSpeed);
+				if(bird.m_rotation.m[0] < -0.5235)
+				{
+					bird.m_rotation.m[0] = -0.5235;
+				}
+				bird.m_translation.m[1]+= 0.5 * bird.dy;
+				bird.dy += g_gravity;
+			}
+		}
+		bird.m_translation.m[0] = 0.15 * mainState.width;
+		return bird;
+	}
+};
+
+var Pipe = 
+{
+	createNew : function()
+	{
+		var pipe = {};
+		pipe.leftTopX = 0.0;
+		pipe.leftTopY = 0.0;
+		pipe.rightBotX = 0.0;
+		pipe.rightBotY = 0.0;
+		pipe.SetBound = function(ltx,lty,rbx,rby)
+		{
+			pipe.leftTopX = ltx;
+			pipe.leftTopY = lty;
+			pipe.rightBotX = rbx;
+			pipe.rightBotY = rby;
+		}
+		pipe.JudgeHit = function(x,y)
+		{
+			var midx = (pipe.leftTopX + pipe.rightBotX)/2.0;
+			var midy = (pipe.leftTopY + pipe.rightBotY)/2.0;
+			var xaxis_ext = (pipe.rightBotX - pipe.leftTopX)/2.0;
+			var yaxis_ext = (pipe.rightBotY - pipe.leftTopY)/2.0;
+			var dx = x - midx; if(dx < 0) dx = -dx;
+			var dy = y - midy; if(dy < 0) dy = -dy;
+			if(dx < 15 + xaxis_ext && dy < 15 + yaxis_ext)
+			{
+				return true;
+			}
+			return false;
+		};
+		pipe.Draw = function()
+		{
+			m_context.save();
+			m_context.fillStyle="#CCFFCC";
+			m_context.fillRect(pipe.leftTopX ,pipe.leftTopY ,pipe.rightBotX - pipe.leftTopX,pipe.rightBotY - pipe.leftTopY);
+			m_context.restore();
+		}
+		return pipe;
+	}
+};
+
+var Bipipes = 
+{
+	createNew : function()
+	{
+		var bipipe = {};
+		bipipe.x = 0.0;
+		bipipe.singlePipe = new Array(2);
+		for(var i=0;i<bipipe.singlePipe.length;i++)
+			bipipe.singlePipe[i] = Pipe.createNew();
+		bipipe.pHeight = Math.random() * (g_groundY - 500) + 200;	
+		bipipe.SetX = function(val)
+		{
+			bipipe.x = val;
+		};
+		bipipe.Update = function()
+		{
+			bipipe.x -= g_forwardSpeed;
+			if(bipipe.x < -50)
+			{
+				bipipe.x = mainState.width + 50;
+			}
+
+		};
+
+		bipipe.JudgeHit = function(x,y)
+		{
+			var halfWidth = m_birdImage.width/2.0;
+			var halfHeight = m_birdImage.height/2.0;
+			for(var step = 0.0;step<g_forwardSpeed;step+=0.1)
+			{
+				if(bipipe.singlePipe[0].JudgeHit(x + step + halfWidth,y + halfHeight))
+				{
+					g_forwardSpeed = step;
+					return true;
+				}
+				if(bipipe.singlePipe[1].JudgeHit(x + step + halfWidth, y + halfHeight))
+				{
+					g_forwardSpeed = step;
+					return true;
+				}
+			}
+			return false;
+		};
+
+		bipipe.Draw = function()
+		{
+			bipipe.singlePipe[0].SetBound(bipipe.x,bipipe.pHeight + 100,bipipe.x + 50,g_groundY);
+			bipipe.singlePipe[0].Draw();
+			bipipe.singlePipe[1].SetBound(bipipe.x,0,bipipe.x + 50,bipipe.pHeight);
+			bipipe.singlePipe[1].Draw();
+		}
+		return bipipe;
+	}
+};
+
+window.onload = Initialize;
+
+function Initialize()
+{
+	mainState = document.getElementById("mainState");
+	console = document.getElementById("shower");
+	m_context = mainState.getContext("2d");
+
+
+	g_gravity = 0.2;
+	g_forwardSpeed = 3;
+	g_groundY = mainState.height * 0.70;
+
+	m_context.fillStyle="#CCCCCC";
+	m_context.fillRect(0,0,mainState.width,mainState.height);
+	
+	m_background = new Image();
+	m_background.src = "pics/background.png";
+	
+	m_birdImage= new Image();
+	m_birdImage.src = "pics/bird.png";
+	
+	m_pipeImage = new Image();
+	m_pipeImage.src = "pics/pipe.png";
+	
+	m_groundImage = new Image();
+	m_groundImage.src = "pics/ground.png";
+	
+	e_pipes = new Array(3);
+	e_bird = Bird.createNew();
+	
+	for(var i = 0;i<e_pipes.length;i++)
+	{
+		e_pipes[i] = Bipipes.createNew();
+		e_pipes[i].SetX(mainState.width + (i * 300));
+	}
+
+	b_isDead = false;
+	setInterval(Display, 17);
+}
+
+function Display()
+{
+	m_context.clearRect(0, 0, mainState.width, mainState.height);
+	m_context.save();
+	m_context.drawImage(m_background,0,0);
+	for(var i = 0;i<e_pipes.length;i++)
+	{
+		e_pipes[i].Update();
+		e_pipes[i].Draw();
+	}
+	if(b_isDead)
+	{
+		g_forwardSpeed = 0.0;
+	}
+	m_context.restore();
+
+	m_context.save();	
+	e_bird.UpdateLogic();
+	e_bird.Draw();
+	m_context.restore();
+	m_context.drawImage(m_groundImage,0,mainState.height * 0.70);
+}
+
+</script>
+
+<script type="text/css">
+
+#container
+{
+margin:0 0 auto;
+width:auto;
+height:auto;
+border:1px;
+};
+
+</script>
+
+</head>
+
+<body>
+
+<div id="container">
+<canvas id="mainState" width="800" height="600" solid #c3c3c3 onclick="e_bird.Flap()">
+��������֧��Canvas��ǩԪ��.
+</canvas>
+<button id="shower" width="300" height="50">hha</button>
+
+</div>
+
+</body>
+</html>
