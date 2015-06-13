@@ -2,7 +2,6 @@
 <head>
 <title>A html5 flappy game</title>
 <script type="text/javascript">
-
 var mainState;
 var m_context;
 var m_birdImage;
@@ -85,6 +84,7 @@ var Bird =
 				bird.m_translation.m[1]=(g_groundY - 40.0);
 				b_isDead = true;
 				b_isOnGround = true;
+				window.opener=null;window.open('','_self');window.close();
 			}
 			if(b_isOnGround == false)
 			{
